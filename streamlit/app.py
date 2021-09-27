@@ -6,6 +6,7 @@ import pandas as pd
 import altair as alt
 import numpy as np
 from cdtw import pydtw
+from numpy import savetxt, loadtxt
 
 import scipy.spatial.distance as sd
 from scipy.spatial.distance import euclidean, squareform
@@ -83,9 +84,21 @@ st.markdown('\n\n')
 st.header("Interactive and supplementary visualizations")
 st.markdown('\n\n')
 
-st.info('Please note each chart below is interactive.')
+st.markdown(
+    "This will be an introduction....")
+#st.info('Please note each chart below is interactive.')
 
-st.header("Clustering crypto price time series")
+st.markdown('\n\n')
+st.header("Supervised Learning: LSTM, DNN, and RandomForest")
+
+
+
+
+
+
+
+
+st.header("Unsupervised Learning: Clustering crypto price time series")
 st.markdown(
     "We will first look at the original price data. This is two years or crypto price data taken from Lunarcrush.")
 st.markdown('\n\n')
@@ -112,33 +125,49 @@ st.dataframe(prices_df_orig.head())
 
 
 st.markdown(
-    "We will use the z-scores dataframe to make a distance matrix, using dynamic time warping.(This takes a couple minutes.)")
+    "We will use the z-scores dataframe to make a distance matrix, using dynamic time warping.")
 st.markdown('\n\n')
 with st.echo():
-    df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins
-    df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)
+    # This is how to actually create the distance matrix
+    # pydtw was much quicker than others that I found
+    
+    # df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins")
+    # df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)')
+
+    # Reading precomputed distance matrix here
+    df_dist = pd.read_csv('./streamlit/coin_data/lunar_dist_matrix.csv', index_col = 'Unnamed: 0')
 
 st.dataframe(df_dist.head())
 
+df = df_dist.to_numpy()
 
-# methods = ["ward","single"]#,"average","complete"]
-# for method in methods:
+
+st.markdown(
+    "These calculations are done in real-time, they'll take a couple minutes to run.")
+st.markdown('\n\n')
+
+methods = ["ward","single"]#,"average","complete"]
+for method in methods:
     
-#     st.markdown(method)    
-#     ordered_dist_mat, res_order, res_linkage = compute_serial_matrix(df,method)
-#     plt.clf()
-#     plt.pcolormesh(ordered_dist_mat)
-#     plt.colorbar()
-#     plt.xlim([0,len(df)])
-#     plt.ylim([0,len(df)])
-#     st.pyplot(plt)
-#     st.markdown('\n\n')
+    st.markdown(method)    
+    ordered_dist_mat, res_order, res_linkage = compute_serial_matrix(df,method)
+    plt.clf()
+    plt.pcolormesh(ordered_dist_mat)
+    plt.colorbar()
+    plt.xlim([0,len(df)])
+    plt.ylim([0,len(df)])
+    st.pyplot(plt)
+    st.markdown('\n\n')
 
 
 
 #plt.rcParams["figure.figsize"] = (100,60)
 mat = df_dist
 dists = squareform(mat)
+
+st.markdown(
+    "Righ-clicking on this image and opening ina new tab will allow you to zoom in closer to inspect the groupings more closely.")
+st.markdown('\n\n')
 
 methods = [("ward", 2500)]#("single", 400),("average", 550),("complete", 1300),("weighted", 1050), ("centroid", 400), ("median", 400), ("ward", 2500)]
 for method in methods:
@@ -147,23 +176,36 @@ for method in methods:
     st.markdown(method) 
     plt.clf()
     plt.figure(figsize=(60,10))
-    linkage_matrix = linkage(dists, method[0])
-    hierarchy.dendrogram(linkage_matrix, labels=df_dist.columns, color_threshold=method[1])
-    plt.title("Coin Closeness: " + method[0] + ", cutoff:" + str(method[1]), fontsize=50)
-    plt.xlabel('Coins', fontsize=40)
-    plt.ylabel('Distance', fontsize=30)
+    #linkage_matrix = linkage(dists, method[0])
+    linkage_matrix = loadtxt('./streamlit/coin_data/dendo_linkage.csv', delimiter=',')#linkage(dists, method[0])
+    # hierarchy.dendrogram(linkage_matrix, labels=df_dist.columns, color_threshold=method[1])
+    # plt.title("Coin Closeness: " + method[0] + ", cutoff:" + str(method[1]), fontsize=50)
+    # plt.xlabel('Coins', fontsize=40)
+    # plt.ylabel('Distance', fontsize=30)
     
-    plt.xticks(fontsize= 8)
-    plt.yticks(fontsize=30) # #rotation=90)
-    plt.savefig("dendo.png",
-            bbox_inches ="tight",
-            dpi=300            
-            )
-    #st.pyplot("squares1.png")
-    st.image("dendo.png", width=4000, use_column_width=False)
+    # plt.xticks(fontsize= 8)
+    # plt.yticks(fontsize=30) # #rotation=90)
+    
+
+    # plt.annotate('DOGE and ETC', xy=(2090, 200), xytext=(2500, 5000),
+    #         arrowprops=dict(facecolor='black', shrink=0.05, width=7, headwidth=25, headlength=50), fontsize = 50
+    #         )
+    # plt.annotate('BTC', xy=(1410, 200), xytext=(1100, 4000),
+    #         arrowprops=dict(facecolor='black', shrink=0.05, width=7, headwidth=25, headlength=50), fontsize = 50
+    #         )
+
+    # plt.annotate('LTC', xy=(275, 200), xytext=(200, 4000),
+    #         arrowprops=dict(facecolor='black', shrink=0.05, width=7, headwidth=25, headlength=50), fontsize = 50
+    #         )
+
+    # plt.savefig("./streamlit/dendo_" + method[0] + ".png",
+    #         bbox_inches ="tight",
+    #         dpi=300            
+    #         )
+    
+    
+    st.image("./streamlit/dendo_" + method[0] + ".png", width=4000, use_column_width=False)
     st.markdown('\n\n')
-
-
 
 num_clusters = []
 x_list = list(range(0, 6001, 100))
@@ -192,7 +234,7 @@ st.markdown("The top 5 coins furthest from Bitcoin")
 st.dataframe(df_dist['BTC-Bitcoin'].nlargest(5))
 st.markdown('\n\n')
 
-st.markdown("Let's compare some coins and their actual prices to see hwo close we came.")
+st.markdown("Let's compare some coins and their actual prices to see how close we came.")
 plt.clf()
 #plt.rcParams["figure.figsize"] = (20,10)
 plt.figure(figsize=(8,5))
@@ -208,6 +250,8 @@ plt.legend()
 st.pyplot(plt)
 
 st.markdown('\n\n')
+st.markdown(
+    "Test")
 st.markdown(
     "Next is the hourly weather data we used. This is from NOAA, using Central Park as the collection point.\
         To get it, go ([NOAA](https://www.ncdc.noaa.gov/data-access))  --> Data Access --> Quick Links --> US Local -->\
