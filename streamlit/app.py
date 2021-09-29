@@ -18,6 +18,7 @@ import datetime as dt
 from streamlit.proto.Markdown_pb2 import Markdown
 from scipy.cluster.hierarchy import fcluster
 from sklearn.metrics import mean_absolute_error
+from sklearn.preprocessing import MinMaxScaler
 
 CURRENT_THEME = "light"
 
@@ -98,10 +99,7 @@ st.header("Supervised Learning: LSTM, DNN, and RandomForest")
 
 st.write("We had three methods of predicting the next day's price. An LSTM and DNN with pytorch, and a RandomForestRegressor.")
 
-
-csv_header = ['Coin', 'Date', 'Actual', 'Naive', 'window = 1 day', 'window = 7 days', 'window = 30 days', 'window = 90 days', 'window = 200 days']
-my_df = pd.read_csv("./streamlit/coin_data/lstm_results.csv", names = csv_header)
-my_df.Date = pd.to_datetime(my_df.Date)
+st.subheader("LSTM")
 
 coin = st.selectbox(
      'Select a coin:',
@@ -109,11 +107,70 @@ coin = st.selectbox(
 
 st.write('You selected:', coin)
 
-#coin = 'BTC'  #'BTC', 'ETH', 'LTC', 'DOGE'
+filename = str(coin).lower() + '_cm_metrics_final.csv'
+orig_df = pd.read_csv(filename)
+st.dataframe(orig_df.tail())
+
+orig_df['date'] = pd.to_datetime(orig_df['date'])
+plt.figure(figsize = (12, 5))
+plt.plot(orig_df['date'], orig_df['PriceUSD'])
+plt.title('{} Historical Price'.format(coin), fontsize=14, fontweight='bold')
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Price in USD', fontsize=14)
+
+time_index_split = int(np.round((len(orig_df)*.90)))   
+
+plt.axvline(x=orig_df.iloc[time_index_split]['date'] , color='r', label='axvline - full height')
+plt.grid()
+st.pyplot(plt)
+plt.clf()
+
+
+scaler = MinMaxScaler()
+train_split_value = 0.9
+num_train = int(np.round(train_split_value * orig_df.shape[0]))
+
+#scaler.fit(orig_df[:num_train][['PriceUSD']])
+#normalized_price = scaler.transform(price[['PriceUSD']])
+scaler.fit(orig_df[:num_train][['PriceUSD']].values)
+normalized_price = pd.DataFrame()
+normalized_price['date'] = orig_df['date']
+normalized_price['Price'] = scaler.transform(orig_df[['PriceUSD']])
+
+#plot 1:
+plt.subplot(1, 2, 1)
+plt.plot(orig_df['date'],orig_df['PriceUSD'])
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Price in USD', fontsize=14)
+plt.grid()
+
+#plot 2:
+plt.subplot(1, 2, 2)
+plt.plot(orig_df['date'],normalized_price['Price'])
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Normalized Price', fontsize=14)
+plt.grid()
+st.pyplot(plt)
+plt.clf()
+
+
+st.code("""
+# This is how to actually create the distance matrix
+
+df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins")
+df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)')
+""", language="python")
+
+
+
+csv_header = ['Coin', 'Date', 'Actual', 'Naive', 'window = 1 day', 'window = 7 days', 'window = 30 days', 'window = 90 days', 'window = 200 days']
+my_df = pd.read_csv("./streamlit/coin_data/lstm_results.csv", names = csv_header)
+my_df.Date = pd.to_datetime(my_df.Date)
+
 df = my_df.copy()
 df = df[df['Coin'] == coin]
 
-st.dataframe(df.head())
+#st.dataframe(df.head())
 
 plt.figure(figsize = (15,8))
 colors = ['green', 'blue', 'red', 'orange', 'purple', 'gray', 'black']
@@ -136,9 +193,10 @@ plt.ylabel('Price (USD)')
 plt.legend(labels, loc='best')
 
 plt.grid() 
-#plt.show()
 st.pyplot(plt)
 
+
+st.subheader("Random Forest Regressor")
 
 
 st.header("Unsupervised Learning: Clustering crypto price time series")
@@ -277,30 +335,64 @@ plt.xlabel("Cutoff")
 plt.ylabel("# Clusters")
 st.pyplot(plt)
 
+coin_near_far = st.selectbox(
+     'Select a coin:',
+     ('BTC-Bitcoin', 'ETH-Ethereum', 'LTC-Litecoin', 'DOGE-Dogecoin'))
 
-st.markdown("The top 5 coins closest to Bitcoin")
-st.dataframe(df_dist['BTC-Bitcoin'].nsmallest(5))
+st.write('You selected:', coin_near_far)
+
+st.markdown("The top 5 coins closest to " + coin_near_far)
+st.dataframe(df_dist[coin_near_far].nsmallest(6).iloc[1:])
 st.markdown('\n\n')
 
+nearest_coin = df_dist[coin_near_far].nsmallest(6).index.values[1]
 
-st.markdown("The top 5 coins furthest from Bitcoin")
-st.dataframe(df_dist['BTC-Bitcoin'].nlargest(5))
+
+st.markdown("The top 5 coins furthest from " + coin_near_far)
+st.dataframe(df_dist[coin_near_far].nlargest(5))
 st.markdown('\n\n')
+
+furthest_coin = df_dist[coin_near_far].nlargest(1).index.values[0]
 
 st.markdown("Let's compare some coins and their actual prices to see how close we came.")
 plt.clf()
-#plt.rcParams["figure.figsize"] = (20,10)
+# #plt.rcParams["figure.figsize"] = (20,10)
+# plt.figure(figsize=(8,5))
+# # multiple line plots
+# plt.plot( prices_df_orig.index.values, coin_near_far, data=prices_df_orig, marker='o', markerfacecolor='black', markersize=3, color='black', linewidth=2)
+# plt.plot( prices_df_orig.index.values, nearest_coin, data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2, secondary_y=True)
+# plt.plot( prices_df_orig.index.values, furthest_coin, data=prices_df_orig, marker='o', markerfacecolor='blue', markersize=3, color='blue', linewidth=2, secondary_y=True)
+
+# # show legend
+# plt.legend()
+
+# # show graph
+# st.pyplot(plt)
+
+
+# create figure and axis objects with subplots()
 plt.figure(figsize=(8,5))
-# multiple line plots
-#plt.plot( prices_df_orig.index.values, 'BTC-Bitcoin', data=prices_df_orig, marker='o', markerfacecolor='blue', markersize=3, color='skyblue', linewidth=2)
-plt.plot( prices_df_orig.index.values, 'APR-APR Coin', data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2)
-plt.plot( prices_df_orig.index.values, 'DGTX-Digitex Futures', data=prices_df_orig, marker='o', markerfacecolor='blue', markersize=3, color='blue', linewidth=2)
+fig,ax = plt.subplots()
+# make a plot
+ax.plot(prices_df_orig.index.values, coin_near_far, data=prices_df_orig, marker='o', markerfacecolor='black', markersize=3, color='black', linewidth=2)
+# set x-axis label
+ax.set_xlabel("year",fontsize=14)
+# set y-axis label
+ax.set_ylabel("lifeExp",color="red",fontsize=14)
 
-# show legend
-plt.legend()
-
-# show graph
+# twin object for two different y-axis on the sample plot
+ax2=ax.twinx()
+# make a plot with different y-axis using second axis object
+ax2.plot(prices_df_orig.index.values, nearest_coin, data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2)
+ax2.plot(prices_df_orig.index.values, furthest_coin, data=prices_df_orig, marker='o', markerfacecolor='blue', markersize=3, color='blue', linewidth=2)
+ax2.set_ylabel("gdpPercap",color="blue",fontsize=14)
+#plt.show()
 st.pyplot(plt)
+
+
+
+
+
 
 # st.markdown('\n\n')
 # st.markdown(
