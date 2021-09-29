@@ -155,10 +155,60 @@ plt.clf()
 
 
 st.code("""
-# This is how to actually create the distance matrix
+def data_sequences(dataset, target_size):
+    d = []
+    for idx in range(len(dataset) - target_size):
+        d.append(dataset[idx : idx+target_size])
+    return np.array(d)
 
-df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins")
-df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)')
+""", language="python")
+
+
+st.code("""
+def split_dataset(dataset, target_size, train_split=0.9):
+
+    data = data_sequences(dataset, target_size)
+
+    num_train = int(np.round(train_split_value * orig_df.shape[0]))
+
+    window_size_adj_split_index = num_train - target_size
+
+    X_train = data[:window_size_adj_split_index, :-1, :]
+    y_train = data[:window_size_adj_split_index, -1, :]
+
+    X_test = data[window_size_adj_split_index:, :-1, :]
+    y_test = data[window_size_adj_split_index:, -1, :]
+
+    return X_train, y_train, X_test, y_test
+
+""", language="python")
+
+st.code("""
+def build_model(X_train, window, num_neurons = 128, activation_function = 'linear'):
+    
+    model = Sequential([
+        LSTM(units=num_neurons, input_shape=(window, X_train.shape[-1]), return_sequences=True),
+        LeakyReLU(alpha=0.8),
+        LSTM(units=num_neurons, return_sequences=True),
+        LeakyReLU(alpha=0.8),
+        Dropout(0.2), 
+        LSTM(units=int(num_neurons/2), return_sequences=False),
+        Dropout(0.2), 
+        Dense(units=1, activation=activation_function)
+    ])
+    return model
+
+""", language="python")
+
+
+st.code("""
+def epochs_loss(model, loss_function = 'mean_squared_error', optimizer='adam'):
+    model.compile(
+        loss=loss_function, 
+        optimizer='adam'
+    )
+    return model
+
 """, language="python")
 
 
@@ -337,7 +387,7 @@ st.pyplot(plt)
 
 coin_near_far = st.selectbox(
      'Select a coin:',
-     ('BTC-Bitcoin', 'ETH-Ethereum', 'LTC-Litecoin', 'DOGE-Dogecoin'))
+     ('ETH-Ethereum', 'BTC-Bitcoin', 'LTC-Litecoin', 'DOGE-Dogecoin'))
 
 st.write('You selected:', coin_near_far)
 
@@ -375,18 +425,23 @@ plt.figure(figsize=(8,5))
 fig,ax = plt.subplots()
 # make a plot
 ax.plot(prices_df_orig.index.values, coin_near_far, data=prices_df_orig, marker='o', markerfacecolor='black', markersize=3, color='black', linewidth=2)
+ax.plot(prices_df_orig.index.values, nearest_coin, data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2)
 # set x-axis label
-ax.set_xlabel("year",fontsize=14)
+ax.set_xlabel("date",fontsize=14)
 # set y-axis label
-ax.set_ylabel("lifeExp",color="red",fontsize=14)
+ax.set_ylabel(coin_near_far + ' and ' + nearest_coin,color="red",fontsize=14)
+
+# set xticks rotation before creating ax2
+plt.xticks(rotation=45, ha='right')
 
 # twin object for two different y-axis on the sample plot
 ax2=ax.twinx()
 # make a plot with different y-axis using second axis object
-ax2.plot(prices_df_orig.index.values, nearest_coin, data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2)
+#ax2.plot(prices_df_orig.index.values, nearest_coin, data=prices_df_orig, marker='o', markerfacecolor='red', markersize=3, color='red', linewidth=2)
 ax2.plot(prices_df_orig.index.values, furthest_coin, data=prices_df_orig, marker='o', markerfacecolor='blue', markersize=3, color='blue', linewidth=2)
-ax2.set_ylabel("gdpPercap",color="blue",fontsize=14)
-#plt.show()
+ax2.set_ylabel(furthest_coin,color="blue",fontsize=14)
+
+
 st.pyplot(plt)
 
 
