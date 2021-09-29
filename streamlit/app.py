@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 import altair as alt
 import numpy as np
-from cdtw import pydtw
+#from cdtw import pydtw
 from numpy import savetxt, loadtxt
 
 import scipy.spatial.distance as sd
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import datetime as dt
 from streamlit.proto.Markdown_pb2 import Markdown
 from scipy.cluster.hierarchy import fcluster
+from sklearn.metrics import mean_absolute_error
 
 CURRENT_THEME = "light"
 
@@ -25,6 +26,9 @@ CURRENT_THEME = "light"
 alt.data_transformers.disable_max_rows()  
 # to run this:
 # streamlit run streamlit/app.py --server.port 8080
+
+# git store token:
+# git config --global credential.helper 'cache --timeout=25000'
 
 # https://docs.streamlit.io/en/0.65.0/advanced_concepts.html
 
@@ -78,23 +82,62 @@ def compute_serial_matrix(dist_mat,method="ward"):
     return seriated_dist, res_order, res_linkage
 
 
-st.title("MADS 692 - Crypto Analysis")
+st.title("MADS 695 - Cryptocurrency Analysis")
 st.header("Diane O and Oleg N")
 st.markdown('\n\n')
 st.header("Interactive and supplementary visualizations")
 st.markdown('\n\n')
 
 st.markdown(
-    "This will be an introduction....")
+    "For our Milestone 2 project we had two tasks, supervised learning and unsupervised learning analysis.")
 #st.info('Please note each chart below is interactive.')
 
 st.markdown('\n\n')
 st.header("Supervised Learning: LSTM, DNN, and RandomForest")
 
 
+st.write("We had three methods of predicting the next day's price. An LSTM and DNN with pytorch, and a RandomForestRegressor.")
 
 
+csv_header = ['Coin', 'Date', 'Actual', 'Naive', 'window = 1 day', 'window = 7 days', 'window = 30 days', 'window = 90 days', 'window = 200 days']
+my_df = pd.read_csv("./streamlit/coin_data/lstm_results.csv", names = csv_header)
+my_df.Date = pd.to_datetime(my_df.Date)
 
+coin = st.selectbox(
+     'Select a coin:',
+     ('BTC', 'ETH', 'LTC', 'DOGE'))
+
+st.write('You selected:', coin)
+
+#coin = 'BTC'  #'BTC', 'ETH', 'LTC', 'DOGE'
+df = my_df.copy()
+df = df[df['Coin'] == coin]
+
+st.dataframe(df.head())
+
+plt.figure(figsize = (15,8))
+colors = ['green', 'blue', 'red', 'orange', 'purple', 'gray', 'black']
+
+labels = []
+for idx, col in enumerate(df.iloc[:,2:].columns):
+   plt.plot(df.Date, df[col], color=colors[idx])
+
+   if idx == 0:
+       label = col
+
+   else:
+       label = col + ", MAE = ${}".format(round(mean_absolute_error(df.Actual, df[col])))
+
+   labels.append(label)    
+
+plt.title('{} Price Prediction'.format(coin), fontsize=14, fontweight='bold')
+plt.xlabel('Days')
+plt.ylabel('Price (USD)')
+plt.legend(labels, loc='best')
+
+plt.grid() 
+#plt.show()
+st.pyplot(plt)
 
 
 
@@ -114,28 +157,34 @@ with st.echo():
     prices_df_z = prices_df_z.set_index('time')
     prices_df_z = prices_df_z.dropna(axis='columns')
 
-st.dataframe(prices_df_z.head())
-
 st.markdown(
-    "To compare and look for similarities between time series, we need to normalize them, which we will do with z-scores. We've removed all columns with nulls.")
+    "You can see that there are quite a few columns with nulls. We'll get rid of them before we make normalize.")
 st.markdown('\n\n')
-
-
 st.dataframe(prices_df_orig.head())
 
 
 st.markdown(
-    "We will use the z-scores dataframe to make a distance matrix, using dynamic time warping.")
+    "To compare and look for similarities between time series, we need to normalize them, which we will do with z-scores. We've removed all columns with nulls. Z-scores are basically the number of standard deviations a value is from a mean.")
 st.markdown('\n\n')
-with st.echo():
-    # This is how to actually create the distance matrix
-    # pydtw was much quicker than others that I found
-    
-    # df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins")
-    # df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)')
+st.dataframe(prices_df_z.head())
 
-    # Reading precomputed distance matrix here
-    df_dist = pd.read_csv('./streamlit/coin_data/lunar_dist_matrix.csv', index_col = 'Unnamed: 0')
+
+
+
+st.markdown(
+    "We will use the z-scores dataframe to make a distance matrix, using dynamic time warping. cdtw from pydtw was the fastest library we found.")
+st.markdown('\n\n')
+
+st.code("""
+# This is how to actually create the distance matrix
+
+df = squareform(sd.pdist(prices_df_z.T, lambda u, v: pydtw.dtw(u,v,pydtw.Settings(step = 'p0sym', window = 'palival', param = 2.0, norm = False, compute_path = True)).get_dist() )) #~ 10-20  mins")
+df_dist = pd.DataFrame(df, columns=prices_df_z.columns, index = prices_df_z.columns)')
+""", language="python")
+
+
+# Reading precomputed distance matrix here
+df_dist = pd.read_csv('./streamlit/coin_data/lunar_dist_matrix.csv', index_col = 'Unnamed: 0')
 
 st.dataframe(df_dist.head())
 
@@ -143,7 +192,11 @@ df = df_dist.to_numpy()
 
 
 st.markdown(
-    "These calculations are done in real-time, they'll take a couple minutes to run.")
+    "This dataframe was precalculated to run on this page.")
+st.markdown('\n\n')
+
+st.markdown(
+    "Below are a couple ways to sort and see the distance matrix in a slightly organized way. You can start to see two main families of coins by price movement appear.")
 st.markdown('\n\n')
 
 methods = ["ward","single"]#,"average","complete"]
@@ -249,13 +302,13 @@ plt.legend()
 # show graph
 st.pyplot(plt)
 
-st.markdown('\n\n')
-st.markdown(
-    "Test")
-st.markdown(
-    "Next is the hourly weather data we used. This is from NOAA, using Central Park as the collection point.\
-        To get it, go ([NOAA](https://www.ncdc.noaa.gov/data-access))  --> Data Access --> Quick Links --> US Local -->\
-             Local Climatological Data (LCD) --> Choose your location(Add to Cart) --> Go to cart at top --> \
-                 LCD CSV, date range --> Continue and give them your email, they'll send it quickly. The documentation is \
-                     [here](https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/LCD_documentation.pdf). ")
-st.markdown('\n\n')
+# st.markdown('\n\n')
+# st.markdown(
+#     "Test")
+# st.markdown(
+#     "Next is the hourly weather data we used. This is from NOAA, using Central Park as the collection point.\
+#         To get it, go ([NOAA](https://www.ncdc.noaa.gov/data-access))  --> Data Access --> Quick Links --> US Local -->\
+#              Local Climatological Data (LCD) --> Choose your location(Add to Cart) --> Go to cart at top --> \
+#                  LCD CSV, date range --> Continue and give them your email, they'll send it quickly. The documentation is \
+#                      [here](https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/LCD_documentation.pdf). ")
+# st.markdown('\n\n')
