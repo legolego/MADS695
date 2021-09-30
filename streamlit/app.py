@@ -27,6 +27,7 @@ CURRENT_THEME = "light"
 alt.data_transformers.disable_max_rows()  
 # to run this:
 # streamlit run streamlit/app.py --server.port 8080
+# "top" and then "kill -9 PID"
 
 # git store token:
 # git config --global credential.helper 'cache --timeout=25000'
@@ -90,41 +91,82 @@ st.header("Interactive and supplementary visualizations")
 st.markdown('\n\n')
 
 st.markdown(
-    "For our Milestone 2 project we had two tasks, supervised learning and unsupervised learning analysis.")
+    """For our Milestone 2 project we had two tasks, supervised learning and unsupervised learning analysis. 
+    We decided to try to do next-day price prediction for the supervised learning part because it was a simpler goal for us to understand. 
+    For the unsupervised learning part of the project, we wanted to see if we could find families of coins whose prices tend to move together. 
+    This was accomplished by finding similar price movement through dynamic time warping and clustering, with the result being quite reasonable. """)
 #st.info('Please note each chart below is interactive.')
 
+st.markdown(
+    """For data collection, we used Coinmetrics and LunarCrush, which cover over a thousand cryptocurrencies providing real-time, daily & weekly updates and historical data,
+    regarding market volume, market capitalization, transactions, coins in wallet, social media data, etc. 
+    Coinmetrics archives cryptocurrencies since January 2010, meaning data are available almost from creation for almost all existing coins. 
+    LunarCrush makes available the last two years worth of data, mostly having to do with social media. 
+    Both Coinmetrics and LunarCrush provide free APIs that facilitate historical data downloading."""
+)
+
+#st.write("We had two methods of predicting the next day's price. An LSTM with pytorch, and a RandomForestRegressor.")
+
 st.markdown('\n\n')
-st.header("Supervised Learning: LSTM, DNN, and RandomForest")
+st.header("Supervised Learning: LSTM and RandomForest")
 
-
-st.write("We had three methods of predicting the next day's price. An LSTM and DNN with pytorch, and a RandomForestRegressor.")
+st.write("""Our supervised learning objective is to predict the future price for cryptocurrencies. 
+    We predict the daily close price of a given coin at time t, based on previous daily close prices from t-T to t-1 for the coin in question. 
+    This is a univariate time series with a training window of size T. We had two methods of predicting the next day's price. An LSTM with pytorch, and a RandomForestRegressor.""")
 
 st.subheader("LSTM")
+
+st.markdown(
+    """
+    This section walks through the implementation of a recurrent neural network using Long Short-term Memory (LSTM) layers to predict future cryptocurrency values based on historical prices. 
+    LSTM is actually recognized for such time series forecasting applications. 
+    The method is known for maintaining an internal state that keeps track of the data previously seen, thereby providing a convenient way to model long-term dependencies. 
+    LSTM requires a 3D tensor input with batch size, timesteps (i.e. T), and input dimension equals 1 in our case since we first focus on a single feature (i.e. price). 
+    Let's start by selecting a coin..."""
+)
 
 coin = st.selectbox(
      'Select a coin:',
      ('BTC', 'ETH', 'LTC', 'DOGE'))
 
-st.write('You selected:', coin)
+st.write(" You selected: " + str(coin) + ". The table below provides a few observations from the original data, which was retrieved from Coinmetrics. (You may want to scroll to the right to see all coin attributes.)")  
+
 
 filename = str(coin).lower() + '_cm_metrics_final.csv'
 orig_df = pd.read_csv(filename)
 st.dataframe(orig_df.tail())
 
+
+st.write('As earlier stated, we essentially focus on coin prices for the supervized learning study. The plot below provides a view of ' + str(coin) + ' historical prices extracted from "PriceUSD" column in the above-mentioned dataframe, along with the cutoff for 90% of the data going to the training set.')
+
 orig_df['date'] = pd.to_datetime(orig_df['date'])
-plt.figure(figsize = (12, 5))
-plt.plot(orig_df['date'], orig_df['PriceUSD'])
+plt.figure(figsize = (13, 6))
+plt.plot(orig_df['date'], orig_df['PriceUSD'], linewidth=3.0)
 plt.title('{} Historical Price'.format(coin), fontsize=14, fontweight='bold')
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Price in USD', fontsize=14)
 
 time_index_split = int(np.round((len(orig_df)*.90)))   
 
-plt.axvline(x=orig_df.iloc[time_index_split]['date'] , color='r', label='axvline - full height')
+plt.axvline(x=orig_df.iloc[time_index_split]['date'], linewidth=3.0, color='r', label='axvline - full height')
 plt.grid()
 st.pyplot(plt)
 plt.clf()
 
+    # Data also requires some preprocessing prior to LSTM application. 
+    # Preliminary clean up tasks include deleting nan observations and sorting data in ascending order by date; 
+    # this ensures predictions only use past data to predict the future. 
+    # Coins are so volatile that it is also safe to normalize price values, which is particularly helpful from LSTM computation perspective. 
+    # The key with normalization is to fit the scaler to training data only, before transforming the entire dataset. 
+    # This mimics reality where we don’t have a clue about the future. 
+
+st.write("""
+            Historical prices highlight a broad range of values that might not be manageable or at least computational exhaustive when running LSTM, so the first step is to normalize data. 
+            We decided to bring values back to the interval [0,1], fitting the scaler to training data only. 
+    """)
+
+if coin != 'LTC':
+    st.write(" Note the values above 1 when we transform the entire dataset; this is due to the strike observed early 2021 in the historical price that appears in test data only.")
 
 scaler = MinMaxScaler()
 train_split_value = 0.9
@@ -137,23 +179,31 @@ normalized_price = pd.DataFrame()
 normalized_price['date'] = orig_df['date']
 normalized_price['Price'] = scaler.transform(orig_df[['PriceUSD']])
 
+
+plt.figure(figsize = (13, 6))
+plt.title('Actual vs Normalized Prices', fontsize=14, fontweight='bold')
 #plot 1:
 plt.subplot(1, 2, 1)
-plt.plot(orig_df['date'],orig_df['PriceUSD'])
+plt.plot(orig_df['date'],orig_df['PriceUSD'], linewidth=3.0)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Price in USD', fontsize=14)
 plt.grid()
 
 #plot 2:
 plt.subplot(1, 2, 2)
-plt.plot(orig_df['date'],normalized_price['Price'])
+plt.plot(orig_df['date'],normalized_price['Price'], linewidth=3.0)
 plt.xlabel('Date', fontsize=14)
 plt.ylabel('Normalized Price', fontsize=14)
 plt.grid()
 st.pyplot(plt)
 plt.clf()
 
-
+st.write("""
+    Another important step of data preprocessing is to reorganize the data in a way that a sequence of the values in previous T days is used to predict the value at time t. 
+    This is done by recording every T+1 consecutive prices, starting at 0 and incrementing by 1 until the (T+1)th last (i.e. from the end); 
+    then a historical array keeps the first T elements and a target vector records the last element from the T+1 sequence under consideration. 
+    These are then split for training and testing.
+""")
 st.code("""
 def data_sequences(dataset, target_size):
     d = []
@@ -161,10 +211,6 @@ def data_sequences(dataset, target_size):
         d.append(dataset[idx : idx+target_size])
     return np.array(d)
 
-""", language="python")
-
-
-st.code("""
 def split_dataset(dataset, target_size, train_split=0.9):
 
     data = data_sequences(dataset, target_size)
@@ -183,9 +229,15 @@ def split_dataset(dataset, target_size, train_split=0.9):
 
 """, language="python")
 
+
+st.write("""
+    At this stage, we use the tensorflow Python library to build a neural network of 3 LSTM and 1 dense layers.  
+    We compile the model using a tensorflow “adam” optimizer, recommended in literature for regression tasks, and a mean squared error (MSE) loss function. 
+    The last step is to fit the model. We mainly use hyper parameters available in the literature, with light tuning based on observations. 
+""")
+
 st.code("""
 def build_model(X_train, window, num_neurons = 128, activation_function = 'linear'):
-    
     model = Sequential([
         LSTM(units=num_neurons, input_shape=(window, X_train.shape[-1]), return_sequences=True),
         LeakyReLU(alpha=0.8),
@@ -198,10 +250,6 @@ def build_model(X_train, window, num_neurons = 128, activation_function = 'linea
     ])
     return model
 
-""", language="python")
-
-
-st.code("""
 def epochs_loss(model, loss_function = 'mean_squared_error', optimizer='adam'):
     model.compile(
         loss=loss_function, 
@@ -212,6 +260,65 @@ def epochs_loss(model, loss_function = 'mean_squared_error', optimizer='adam'):
 """, language="python")
 
 
+st.write("""
+    We can now run the model and make predictions.
+""")
+
+st.code("""
+window = 90
+X_train, y_train, X_test, y_test = split_dataset(normalized_price[['Price']], target_size = window + 1, train_split=train_split_value) 
+model = build_model(X_train, window, num_neurons = 128, activation_function = 'linear')
+model = epochs_loss(model, loss_function = 'mean_squared_error', optimizer='adam')
+print(model.summary())
+
+history = model.fit(
+    X_train, 
+    y_train, 
+    epochs=25, 
+    batch_size=64, 
+    shuffle=False,
+    validation_split=0.1
+)
+
+model.predict(X_test)
+    
+""", language="python")
+
+st.write("""
+    The model effectiveness is guaranteed by MSE learning curves. Below is an example for a window size of 200 days; except for Ethereum, you can see how our model converges (typically in less than 15 epochs).
+""")
+
+csv_header = ['epoch', 'loss', 'val_loss', 'coin']
+my_df = pd.read_csv("./streamlit/coin_data/lstm_mse_200.csv", names = csv_header)
+my_df = my_df[my_df['coin'] == coin].reset_index()
+
+plt.figure(figsize = (12,5))
+plt.plot(my_df['loss'], linewidth=3.0)
+plt.plot(my_df['val_loss'], linewidth=3.0)
+plt.title('Learning Curve, window = 200', fontsize=16, fontweight='bold')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.grid() 
+st.pyplot(plt)
+
+st.write("Finally, the plots below provide " + str(coin) + "predictions for multiple window sizes. ")
+st.write("""
+predictions follow the same trend as the actual price values. However, except for the naive prediction model that just assigns t-1 price value to t, the other attempts show a higher mean absolute error (MAE) and give the impression that there is a cap that predictions cannot overtake. MAE was chosen for its simple interpretability, as it has the units of the dependent variable. Even predictions for a 1 day window that could be expected to be similar to the naive prediction screw up during high spikes. In our opinion, this is caused by the nature of the data and the normalization scaler that is set on the basis of training data only, where it is not possible to anticipate the spike observed in mid 2020. 
+"""
+)
+
+st.write(
+"""
+Expanding the training set to encompass this might create other issues because this will represent 96 to 97% of the data; using only 3% of data for validation would certainly make MAE noisy. Another idea to fix the scaler was to add a very big, temporary value when fitting (e.g. $80000); this didn’t fix the issue but playing with larger windows that could maintain in memory spikes (even much smaller) from the past until current prediction cases, and other coins where similar peaks had been experienced in training data greatly improved MAE (i.e. approximately $2000 for 200 days) and almost perfect predictions for LTC. The reader would certainly want to refer to the notebook for those improvements.
+"""
+)
+
+st.write(
+"""
+DOGE coin prediction was a complete failure. The problem here is not our model but in the data; looking at the original dataset, we see that there is a total break with the past. Nothing similar to the future is observed in the past and sent to the model.
+"""
+)
 
 csv_header = ['Coin', 'Date', 'Actual', 'Naive', 'window = 1 day', 'window = 7 days', 'window = 30 days', 'window = 90 days', 'window = 200 days']
 my_df = pd.read_csv("./streamlit/coin_data/lstm_results.csv", names = csv_header)
@@ -222,12 +329,12 @@ df = df[df['Coin'] == coin]
 
 #st.dataframe(df.head())
 
-plt.figure(figsize = (15,8))
+plt.figure(figsize = (16,10))
 colors = ['green', 'blue', 'red', 'orange', 'purple', 'gray', 'black']
 
 labels = []
 for idx, col in enumerate(df.iloc[:,2:].columns):
-   plt.plot(df.Date, df[col], color=colors[idx])
+   plt.plot(df.Date, df[col], linewidth=3.0, color=colors[idx])
 
    if idx == 0:
        label = col
@@ -244,6 +351,8 @@ plt.legend(labels, loc='best')
 
 plt.grid() 
 st.pyplot(plt)
+
+st.write("PLEASE FEEL FREE TO CHANGE COIN SELECTION AND SEE RESULTS FOR OTHER CRYPTOCURRENCIES.")
 
 
 st.subheader("Random Forest Regressor")
