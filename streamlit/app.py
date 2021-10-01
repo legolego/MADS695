@@ -19,6 +19,12 @@ from streamlit.proto.Markdown_pb2 import Markdown
 from scipy.cluster.hierarchy import fcluster
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import make_scorer, mean_squared_error, median_absolute_error, accuracy_score, max_error, classification_report, confusion_matrix
+
 
 CURRENT_THEME = "light"
 
@@ -355,7 +361,342 @@ st.pyplot(plt)
 st.write("PLEASE FEEL FREE TO CHANGE COIN SELECTION AND SEE RESULTS FOR OTHER CRYPTOCURRENCIES.")
 
 
-st.subheader("Random Forest Regressor")
+st.header("Random Forest Regressor")
+
+st.write("Let's pick one of the two different data sources we have. Coinmetrics provides more financial data, and information about coin wallets, while LunarCrush  has social media data related to each coin.")
+
+which = st.selectbox(
+     'Select a source:',
+     ('Coinmetrics', 'Lunar Crush'))
+
+st.write(" You selected: " + str(which) + ". ")  
+
+if which == 'Coinmetrics':
+    df_cm = pd.read_csv('./btc_cm_metrics_final.csv', index_col=False)
+    df_cm['date'] = df_cm['date'].str[:10]
+    df_cm['date'] = pd.to_datetime(df_cm['date'])
+    df_cm = df_cm.set_index('date')
+
+elif which == 'Lunar Crush':
+    df_cm = pd.read_csv('./btc_vals_lunar_social.csv', index_col=False)
+    df_cm = df_cm.drop('asset_id', axis=1)
+    df_cm['time'] = pd.to_datetime(df_cm['time'])
+    df_cm.rename(columns={'close': 'PriceUSD', 'time': 'date'}, inplace=True)
+    df_cm = df_cm.set_index('date')
+
+st.dataframe(df_cm.head())
+
+st.write("We'll get rid of all rows where PriceUSD is nan, then drop all other columns thathave any nans in them. We know we have a complete values for all remining columns now. We will make acouple columns that just shift past values into the future one or two days, but we'll leave the nans that result.")
+
+
+with st.echo():
+    df_cm = df_cm.dropna(subset=['PriceUSD'])            # drop all rows where priceUSD is NAN
+    df_cm = df_cm.dropna(axis=1)                         # drop all remaining columns with NANs now, since Price is our target
+    df_cm['close_1'] = df_cm['PriceUSD'].shift(-1)
+    df_cm['close_2'] = df_cm['PriceUSD'].shift(-2)       # our targets, 1 or 2 days ahead
+
+
+pct_to_train_with = st.selectbox(
+     'Select a % split for the training/test sets:',
+     (.8, .85, .9, .95, .97, .98, .99))
+
+st.write(" You selected: " + str(pct_to_train_with) + ". ")
+
+# split test/train
+
+train_days = int(np.round((len(df_cm)*pct_to_train_with)))
+test_days = len(df_cm) - train_days
+
+
+train_df = df_cm.head(train_days)
+test_df = df_cm.tail(test_days)
+
+start_date_of_train = pd.to_datetime(train_df.index[0].strftime('%Y-%m-%d'))
+start_date_of_test = pd.to_datetime(test_df.index[0].strftime('%Y-%m-%d'))
+
+st.write("We're left with " + str(train_days) + " training days, and " + str(test_days) + " test days." )
+
+st.write("Next, depending on the chose data set, we'll exclude columns from the regressor. They're either our target columns, or too closely correlated with them, having already seen their coeffecients after running previous regressions." )
+with st.echo():
+    # exclude if only using Coin Metrics
+    # These are too correlated with price and were manually removed after looking at feature importance
+    # Market Cap numbers should definately be removed
+    # our target also should be in the training data
+
+    if which == 'Coinmetrics':
+        features_to_exclude = ['close_1', 'close_2', 'CapAct1yrUSD', 'CapMVRVCur',\
+                            'CapMVRVFF', 'CapMrktCurUSD', 'CapMrktFFUSD', 'CapRealUSD', 'PriceBTC', 'PriceUSD']
+    elif which == 'Lunar Crush':
+        # exclude from Lunar Crush
+        features_to_exclude = ['PriceUSD', 'close_1', 'close_2', 'high', 'low',\
+                            'open', 'market_cap', 'market_cap_global']
+
+    features = list(train_df.drop(features_to_exclude, axis=1).columns)
+
+
+days_to_predict = st.selectbox(
+     'Select the number of days to predict ahead:',
+     (1, 2))
+
+st.write(" You selected: " + str(days_to_predict) + ". ")
+
+st.write("Let's make our test and training datasets.")
+
+with st.echo():
+    X_train = train_df[features]
+    y_train = train_df['close_' + str(days_to_predict)]
+
+    X_test = test_df[features].iloc[:-days_to_predict]
+    y_test = test_df['close_' + str(days_to_predict)].iloc[:-days_to_predict]
+
+st.write("We ran a grid search, but it's values weren't optimal, so we had to twaek them manually.")
+
+with st.echo():
+    # param_grid = {'n_estimators': [75, 95, 110, 125, 135],
+    #               'max_depth': [2, 3, 4, 5, 6],
+    #               "max_features": ['log2', 'auto', 'sqrt'],          # log2 was best previously
+    #               "criterion": ['mae']} # 'mse',                       # mae was best previously
+    # scorers = {
+    #     'mse': make_scorer(mean_squared_error),
+    #     'max_error' : make_scorer(max_error),
+    #     'mae' : make_scorer(median_absolute_error)
+    # }
+
+    # regr = RandomForestRegressor(random_state=42)
+    # grid = GridSearchCV(regr, param_grid, cv=5, refit='mae', return_train_score=True, scoring=scorers) 
+    
+    # grid.fit(X_train, y_train) 
+    
+    # print(grid.best_params_) 
+    # grid_predictions = grid.predict(X_test) 
+
+    # found by gridsearch for Coin Metrics
+    # {'criterion': 'mae', 'max_depth': 2, 'max_features': 'log2', 'n_estimators': 110}
+
+    # found by gridsearch for LunarCrush
+    # {'criterion': 'mae', 'max_depth': 2, 'max_features': 'auto', 'n_estimators': 95}
+
+    #opt_params = grid.best_params_
+
+    if which == 'Coinmetrics':
+        # Coin Metrics
+        opt_params = {'criterion': 'mae', 'max_depth': 6, 'max_features': 'log2', 'n_estimators': 100}
+    elif which == 'Lunar Crush':
+        # LunarCrush
+        opt_params = {'criterion': 'mae', 'max_depth': 11, 'max_features': 'auto', 'n_estimators': 130}
+
+st.write("We'll call the regressor, unpacking the parameters in the dictionary above. This may take a few seconds, the regressor is actually running right now.")
+with st.echo():
+    regr = RandomForestRegressor(random_state=42, **opt_params)
+    regr.fit(X_train, y_train)
+
+st.write("Some regressors give you feature importance for free, and it's valueable to look at these values to see which are most influential. We'll look at the Top 5 here.")
+
+
+feats = [x for _, x in sorted(zip(regr.feature_importances_,features),reverse=True)]
+importance = sorted(regr.feature_importances_,reverse=True)
+
+st.write(list(zip(feats, importance))[:5])
+
+dfPlot = pd.DataFrame(list(zip(feats, importance)),
+               columns =['Features', 'Importance'])
+dfPlot['CumSum'] = dfPlot['Importance'].cumsum()
+
+st.write("Next we'll make a Pareto chart with those features that together make up 90% of the importance out of all of them.")
+
+# Get features that make up at least this percentage of importance according to the regressor
+thresh = .9
+thresh_len = len([x for x in np.cumsum(sorted(regr.feature_importances_,reverse=True)) if x <= thresh])
+
+# https://medium.com/analytics-vidhya/creating-a-dual-axis-pareto-chart-in-altair-e3673107dd14
+sort_order = dfPlot["Features"].tolist()
+# The base element adds data (the dataframe) to the Chart
+# The categories of complaints are positioned along the X axis
+base = alt.Chart(dfPlot.head(thresh_len+1), title="Pareto chart for top " + str(thresh_len+1) + " features from " + which).encode(
+    x = alt.X("Features:O",sort=sort_order),
+).properties (
+width = 600, 
+height = 500
+)
+# Create the bars with length encoded along the Y axis 
+bars = base.mark_bar(size = 30).encode(
+    y = alt.Y("Importance:Q"),
+).properties (
+width = 600
+)
+# Create the line chart with length encoded along the Y axis
+line = base.mark_line(
+                       strokeWidth= 1.5,
+                       color = "#cb4154" 
+).encode(
+    y=alt.Y('CumSum:Q',
+             title='Cumulative Importance',
+             axis=alt.Axis(format=".0%")   ),
+    text = alt.Text('CumSum:Q')
+)
+# Mark the percentage values on the line with Circle marks
+points = base.mark_circle(
+              strokeWidth= 3,
+              color = "#cb4154" 
+).encode(
+         y=alt.Y('CumSum:Q', axis=None),
+)
+# Mark the bar marks with the value text
+bar_text = bars.mark_text(
+    align='left',
+    baseline='middle',
+    dx=-10,  #the dx and dy can be manipulated to position text
+    dy = -10, #relative to the bar
+).encode(
+    y= alt.Y('Importance:Q', axis=None),
+    # we'll use the percentage as the text
+    text=alt.Text('Importance:Q', format="0.2f"),
+    color= alt.value("#000000")
+)
+
+# Mark the Circle marks with the value text
+point_text = points.mark_text(
+    align='left',
+    baseline='middle',
+    dx=-10, 
+    dy = -10,
+).encode(
+    y= alt.Y('CumSum:Q', axis=None),
+    # we'll use the percentage as the text
+    text=alt.Text('CumSum:Q', format="0.0%"),
+    color= alt.value("#cb4154")
+)
+# Layer all the elements together 
+st.altair_chart((bars + line + bar_text ).resolve_scale(
+    y = 'independent'
+))
+
+
+st.write("We will rerun the regression again, this time with the fewer features we found and show the results in a plot, as well as an MAE score.")
+
+# Including all features under importance threshold
+updated_feats = feats[:thresh_len+1]
+
+print(updated_feats)
+
+# Re-training model with smaller subset of features
+regr = RandomForestRegressor(random_state=42, **opt_params)
+
+
+X_train = train_df[updated_feats]
+y_train = train_df['close_' + str(days_to_predict)]
+
+regr.fit(X_train, y_train)
+
+feat_importance = regr.feature_importances_
+
+feats = [x for _, x in sorted(zip(feat_importance,updated_feats),reverse=True)]
+importances = sorted(feat_importance,reverse=True)
+
+train_predictions = regr.predict(X_train) # X has new updated top feature list
+
+date_first_pred_train = start_date_of_train + timedelta(days=days_to_predict)
+
+df_preds_train = pd.DataFrame(zip(pd.date_range(date_first_pred_train, periods=len(train_predictions)).tolist(), train_predictions ))
+df_preds_train.columns = ['date', 'train_pred']
+
+X_test = test_df[updated_feats]
+
+test_predictions = regr.predict(X_test)
+
+date_first_pred_test = start_date_of_test + timedelta(days=days_to_predict)
+
+df_preds_test = pd.DataFrame(zip(pd.date_range(date_first_pred_test, periods=len(test_predictions)).tolist(), test_predictions ))
+df_preds_test.columns = ['date', 'test_pred']
+
+scale = alt.Scale(domain=['Actual Price', 'Predicted Training Price', 'Predicted Test Price'], range=['lightgreen', 'blue', 'orange'])
+
+bdf = df_cm.reset_index()[['date', 'PriceUSD']]
+
+bdf.insert(0, 'ColVal', 'Actual Price')
+with st.echo():
+    actualBTC = alt.Chart(bdf, title="BTC Prediction for " + str(days_to_predict) + " days ahead with " + str(pct_to_train_with) + " Training Set").mark_line().encode(
+        x='date:T',
+        y='PriceUSD:Q',
+        color = alt.Color('ColVal:N', scale=scale)
+    )
+
+    trdf = df_preds_train.copy()
+    trdf.insert(0, 'ColVal', 'Predicted Training Price')
+
+    train_preds_line = alt.Chart(trdf).mark_line().encode(
+        x='date:T',
+        y='train_pred:Q',
+        strokeDash=alt.value([2, 2]),
+        color = alt.Color('ColVal:N', scale=scale)  
+    )
+
+    tsdf = df_preds_test.copy()
+    tsdf.insert(0, 'ColVal', 'Predicted Test Price')
+
+    test_preds_line = alt.Chart(tsdf).mark_line().encode(
+        x='date:T',
+        y='test_pred:Q',
+        strokeDash=alt.value([2, 2]),
+        color = alt.Color('ColVal:N', scale=scale)  
+    )
+
+    rules = alt.Chart(pd.DataFrame({
+    'Date': [start_date_of_test],
+    'color': ['red']
+    })).mark_rule().encode(
+    x='Date:T',
+    color=alt.Color('color:N', scale=None)
+    )
+
+st.write("You can drag and zoom this plot.")
+st.altair_chart((actualBTC + rules + train_preds_line + test_preds_line).properties(
+    width=600,
+    height=400
+).interactive())
+
+st.write("Let's see how we did with an MAE score.")
+
+with st.echo():
+    assert test_df.iloc[days_to_predict:].index[0] == df_preds_test.iloc[:-days_to_predict]['date'][0], "Start dates if TEST not equal"
+    assert test_df.iloc[days_to_predict:].index[-1] == df_preds_test.iloc[:-days_to_predict]['date'].iloc[-1], "End dates if TEST not equal"
+
+    y_true = test_df.iloc[days_to_predict:]['PriceUSD'] # 7/20 - 9/03
+    y_pred = df_preds_test['test_pred'].iloc[:-days_to_predict]
+
+    mae_pred = mean_absolute_error(y_true, y_pred)
+
+st.write("We got an MAE score of:" + str(np.round(mae_pred, 2) + ". This is the average difference from the true value."))
+
+st.write("Lastly, we'll look at a Residual vs Fit plot to see how well the regressor wctually worked. Ideally you'd see a random distribution round zero here. This is a way to check a suspiciously high R^2 score. If we increase the percentage for the size of size of the training set, the score and plot gets much better.")
+
+plt.clf()
+with st.echo():
+    plt.scatter(y_true.to_numpy() - y_pred,y_pred)
+    plt.title('Residuals versus Fits')
+
+st.pyplot(plt)
+
+
+print(f'R^2 Score: {np.round(regr.score(X_train,y_train),4)}')
+
+
+# https://statisticsbyjim.com/regression/interpret-r-squared-regression/
+
+text = '''The data in the fitted line plot follow a very low noise relationship, and the R-squared is 98.5%,
+ which seems fantastic. However, the regression line consistently under and over-predicts the data along
+  the curve, which is bias. The Residuals versus Fits plot emphasizes this unwanted pattern. 
+  An unbiased model has residuals that are randomly scattered around zero. Non-random residual patterns
+   indicate a bad fit despite a high R2. Always check your residual plots!'''
+plt.clf()
+
+
+
+
+
+
+
+
 
 
 st.header("Unsupervised Learning: Clustering crypto price time series")
