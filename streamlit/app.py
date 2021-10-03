@@ -449,7 +449,7 @@ with st.echo():
     X_test = test_df[features].iloc[:-days_to_predict]
     y_test = test_df['close_' + str(days_to_predict)].iloc[:-days_to_predict]
 
-st.write("We ran a grid search, but it's values weren't optimal, so we had to twaek them manually.")
+st.write("We ran a grid search, but it's values weren't optimal, so we had to tweak them manually.")
 
 with st.echo():
     # param_grid = {'n_estimators': [75, 95, 110, 125, 135],
@@ -666,7 +666,7 @@ with st.echo():
 
     mae_pred = mean_absolute_error(y_true, y_pred)
 
-st.write("We got an MAE score of:" + str(np.round(mae_pred, 2) + ". This is the average difference from the true value."))
+st.write("We got an MAE score of: " + str(np.round(mae_pred, 2)) + ". This is the average difference from the true value, which will decrease as the training size percentage increases.")
 
 st.write("Lastly, we'll look at a Residual vs Fit plot to see how well the regressor wctually worked. Ideally you'd see a random distribution round zero here. This is a way to check a suspiciously high R^2 score. If we increase the percentage for the size of size of the training set, the score and plot gets much better.")
 
