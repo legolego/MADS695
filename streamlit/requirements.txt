@@ -13,4 +13,3 @@ altair_data_server
 fastdtw
 fastcluster==1.1.27
 dtaidistance==2.2.1
-cdtw
