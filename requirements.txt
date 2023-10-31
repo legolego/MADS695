@@ -12,7 +12,7 @@ sktime
 altair==5.1.2
 altair_data_server
 fastdtw
-fastcluster==1.1.27
+fastcluster==1.2.6
 dtaidistance==2.2.1
 streamlit
 us
