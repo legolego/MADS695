@@ -1,4 +1,5 @@
-pandas
+numpy==1.23.1
+pandas==2.0.3
 Cython
 urllib3
 tsfresh==0.17.0
@@ -8,8 +9,8 @@ matplotlib
 coinmetrics
 tensorflow
 sktime
-altair
+altair==5.1.2
 altair_data_server
 fastdtw
-fastcluster==1.1.27
+fastcluster==1.2.6
 dtaidistance==2.2.1
