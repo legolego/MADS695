@@ -455,15 +455,15 @@ with st.echo():
     # param_grid = {'n_estimators': [75, 95, 110, 125, 135],
     #               'max_depth': [2, 3, 4, 5, 6],
     #               "max_features": ['log2', 'auto', 'sqrt'],          # log2 was best previously
-    #               "criterion": ['mae']} # 'mse',                       # mae was best previously
+    #               "criterion": ['absolute_error']} # 'mse',                       # absolute_error was best previously
     # scorers = {
     #     'mse': make_scorer(mean_squared_error),
     #     'max_error' : make_scorer(max_error),
-    #     'mae' : make_scorer(median_absolute_error)
+    #     'absolute_error' : make_scorer(median_absolute_error)
     # }
 
     # regr = RandomForestRegressor(random_state=42)
-    # grid = GridSearchCV(regr, param_grid, cv=5, refit='mae', return_train_score=True, scoring=scorers) 
+    # grid = GridSearchCV(regr, param_grid, cv=5, refit='absolute_error', return_train_score=True, scoring=scorers) # refit was : mae
     
     # grid.fit(X_train, y_train) 
     
@@ -471,19 +471,19 @@ with st.echo():
     # grid_predictions = grid.predict(X_test) 
 
     # found by gridsearch for Coin Metrics
-    # {'criterion': 'mae', 'max_depth': 2, 'max_features': 'log2', 'n_estimators': 110}
+    # {'criterion': 'absolute_error', 'max_depth': 2, 'max_features': 'log2', 'n_estimators': 110}
 
     # found by gridsearch for LunarCrush
-    # {'criterion': 'mae', 'max_depth': 2, 'max_features': 'auto', 'n_estimators': 95}
+    # {'criterion': 'absolute_error', 'max_depth': 2, 'max_features': 'auto', 'n_estimators': 95}
 
     #opt_params = grid.best_params_
 
     if which == 'Coinmetrics':
         # Coin Metrics
-        opt_params = {'criterion': 'mae', 'max_depth': 6, 'max_features': 'log2', 'n_estimators': 100}
+        opt_params = {'criterion': 'absolute_error', 'max_depth': 6, 'max_features': 'log2', 'n_estimators': 100}
     elif which == 'Lunar Crush':
         # LunarCrush
-        opt_params = {'criterion': 'mae', 'max_depth': 11, 'max_features': 'auto', 'n_estimators': 130}
+        opt_params = {'criterion': 'absolute_error', 'max_depth': 11, 'max_features': 'auto', 'n_estimators': 130}
 
 st.write("We'll call the regressor, unpacking the parameters in the dictionary above. This may take a few seconds, the regressor is actually running right now.")
 with st.echo():
